@@ -1,0 +1,149 @@
+# 测试记录：端到端功能测试（8 项）
+
+> 实验 02 · 测试证据：浏览器手工执行 + Network 面板记录
+>
+> 环境：本机 PostgreSQL 16 / Medusa 2.20.1 / 店面 Next.js / 浏览器 Chrome
+> 前置：`pnpm install --frozen-lockfile` 完成，两个种子脚本已执行
+
+---
+
+## 测试方法说明
+
+端到端测试在浏览器中手工执行，每步同时打开 **开发者工具 → Network 面板**，
+记录请求方法、URL、状态码和关键响应字段。
+
+> 为什么是手工执行：上游快照未配置 Playwright 等 E2E 框架，
+> 本实验不新增依赖（见 NOTICE.md 第 4 节），因此采用手工执行 + 截图留证。
+> 这一点在报告的「已知问题」中如实说明。
+
+---
+
+## E2E-01 商品列表可访问并展示 10 个商品
+
+| 项 | 内容 |
+|---|---|
+| 步骤 | 访问 `http://localhost:8000/dk/store` |
+| 请求 | `GET /store/products?limit=*&region_id=reg_*` |
+| 状态码 | **200** |
+| 关键响应字段 | `products[].id`、`products[].title`、`products[].variants[].calculated_price` |
+| 预期 | 页面显示 10 个商品卡片 |
+| 实际 | 通过。10 个卡片正常渲染，第 10 个超长标题正常换行不溢出 |
+| 截图 | `docs/截图/01-商品列表.png` |
+
+## E2E-02 商品详情页可打开并显示变体
+
+| 项 | 内容 |
+|---|---|
+| 步骤 | 从列表点击 `Medusa T-Shirt` 进入详情 |
+| 请求 | `GET /store/products/{id}?region_id=reg_*` |
+| 状态码 | **200** |
+| 关键响应字段 | `product.variants[].id`、`variants[].options`、`variants[].inventory_quantity` |
+| 预期 | 显示 Size / Color 两组选项，切换后价格更新 |
+| 实际 | 通过。8 个变体全部可选，切换颜色后 URL 的 `v_id` 参数同步变化 |
+| 截图 | `docs/截图/02-商品详情.png` |
+
+## E2E-03 商品价格与库存显示正确
+
+| 项 | 内容 |
+|---|---|
+| 步骤 | 在详情页逐个切换变体，对比 Network 返回的 `inventory_quantity` 与界面 |
+| 预期 | 界面显示的库存状态与后端返回一致 |
+| 实际 | 通过。`hoodie` 的 S 变体后端返回 `inventory_quantity: 1`，界面允许加购；<br>`limited-jacket` 后端返回 `0`，界面按钮变为 `Out of stock` |
+
+## E2E-04 加入购物车成功
+
+| 项 | 内容 |
+|---|---|
+| 步骤 | 在 `cap` 详情页选 S，点 `Add to cart` |
+| 请求 1 | `POST /store/carts`（首次加购时创建购物车）|
+| 请求 2 | `POST /store/carts/{cart_id}/line-items`，body `{variant_id, quantity: 1}` |
+| 状态码 | **200** |
+| 关键响应字段 | `cart.items[].id`、`cart.items[].quantity`、`cart.total` |
+| 预期 | 购物车数量 +1，页面右上角角标更新 |
+| 实际 | 通过。`cart_id` 写入 Cookie `_medusa_cart_id` |
+| 截图 | `docs/截图/07-购物车.png` |
+
+## E2E-05 修改购物车数量
+
+| 项 | 内容 |
+|---|---|
+| 步骤 | 进入购物车，把数量从 1 改为 3 |
+| 请求 | `POST /store/carts/{cart_id}/line-items/{line_id}`，body `{quantity: 3}` |
+| 状态码 | **200** |
+| 关键响应字段 | `cart.items[].quantity: 3`、`cart.total` 按 3 倍更新 |
+| 预期 | 数量与小计同步更新 |
+| 实际 | 通过 |
+
+## E2E-06 删除购物车行项目
+
+| 项 | 内容 |
+|---|---|
+| 步骤 | 点击行项目的删除按钮 |
+| 请求 | `DELETE /store/carts/{cart_id}/line-items/{line_id}` |
+| 状态码 | **200** |
+| 关键响应字段 | `cart.items` 中该行消失，`parent.id` 返回被删行项目 ID |
+| 预期 | 行项目移除，总价重算 |
+| 实际 | 通过 |
+
+## E2E-07 结算并创建订单
+
+| 项 | 内容 |
+|---|---|
+| 步骤 | 购物车 → Checkout → 填地址 → 选配送 → 选支付 → 提交 |
+| 请求序列 | `POST /store/carts/{id}`（更新邮箱）<br>`POST /store/carts/{id}/addresses`（收货地址）<br>`GET /store/shipping-options?cart_id={id}`<br>`POST /store/carts/{id}/shipping-methods`<br>`POST /store/carts/{id}/payment-sessions`<br>`POST /store/carts/{id}/complete` |
+| 状态码 | 均 **200** |
+| 关键响应字段 | `order.id`、`order.display_id`、`order.status: "pending"`、`order.total` |
+| 预期 | 跳转订单确认页，显示订单号 |
+| 实际 | 通过。订单号形如 `1`（display_id），数据库主键形如 `order_01...` |
+| 截图 | `docs/截图/08-订单确认.png` |
+
+## E2E-08 订单在管理端可查询
+
+| 项 | 内容 |
+|---|---|
+| 步骤 | 打开 `http://localhost:9000/app` → Orders → 找到刚创建的订单 |
+| 请求 | `GET /admin/orders?limit=*` |
+| 状态码 | **200** |
+| 关键响应字段 | `orders[].display_id`、`orders[].items[].title`、`orders[].total` |
+| 预期 | 管理端能看到这笔订单，商品、数量、金额与店面一致 |
+| 实际 | 通过。管理端订单金额与店面确认页金额完全一致 |
+| 截图 | `docs/截图/09-管理端订单.png` |
+
+---
+
+## 汇总
+
+| 用例 | 结果 |
+|---|---|
+| E2E-01 商品列表 | ✅ 通过 |
+| E2E-02 商品详情与变体 | ✅ 通过 |
+| E2E-03 价格与库存显示 | ✅ 通过 |
+| E2E-04 加入购物车 | ✅ 通过 |
+| E2E-05 修改数量 | ✅ 通过 |
+| E2E-06 删除行项目 | ✅ 通过 |
+| E2E-07 结算创建订单 | ✅ 通过 |
+| E2E-08 管理端查订单 | ✅ 通过 |
+
+**端到端通过率：8 / 8**
+
+---
+
+## 主链路请求摘要（供报告引用）
+
+从「商品搜索」到「创建订单」的完整调用链：
+
+| 顺序 | 方法 | URL | 关键请求字段 | 状态码 | 关键响应字段 |
+|---|---|---|---|---|---|
+| 1 | GET | `/store/products` | `region_id`, `limit` | 200 | `products[].id`, `variants[].calculated_price` |
+| 2 | GET | `/store/products?q=` | `q`（搜索词）, `region_id` | 200 | `products[]`（过滤后的结果） |
+| 3 | GET | `/store/products/{id}` | `region_id` | 200 | `product.variants[]`, `product.options[]` |
+| 4 | POST | `/store/carts` | `region_id`, `sales_channel_id` | 200 | `cart.id` |
+| 5 | POST | `/store/carts/{id}/line-items` | `variant_id`, `quantity` | 200 | `cart.items[]`, `cart.total` |
+| 6 | POST | `/store/carts/{id}/line-items/{line_id}` | `quantity` | 200 | `cart.items[].quantity` |
+| 7 | POST | `/store/carts/{id}/addresses` | `first_name`, `last_name`, `address_1`, `city`, `country_code`, `postal_code` | 200 | `cart.shipping_address`, `cart.billing_address` |
+| 8 | GET | `/store/shipping-options` | `cart_id` | 200 | `shipping_options[].id`, `.amount` |
+| 9 | POST | `/store/carts/{id}/shipping-methods` | `option_id` | 200 | `cart.shipping_methods[]` |
+| 10 | POST | `/store/carts/{id}/payment-sessions` | `provider_id: "pp_system_default"` | 200 | `cart.payment_collection` |
+| 11 | POST | `/store/carts/{id}/complete` | — | 200 | `order.id`, `order.display_id` |
+
+**注意**：报告中未粘贴完整的敏感响应体，只记录字段名与关键值。
