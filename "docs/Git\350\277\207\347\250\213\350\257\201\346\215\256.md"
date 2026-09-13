@@ -1,0 +1,181 @@
+# 个人开发过程与 Git 证据对照表
+
+> 实验 02 · 用于对照「开发阶段」与「Commit / Issue / PR 证据」
+>
+> 教师可据此核验个人开发过程，而不是只看实验报告。
+
+---
+
+## 一、仓库与远程配置
+
+```bash
+$ git remote -v
+origin   <个人实验仓库>   (fetch/push)
+```
+
+| 远程 | 用途 | 说明 |
+|---|---|---|
+| `origin` | 个人实验仓库 | 本次实验的全部提交在此 |
+
+基线固定在一个具体的 Commit 上，保证任何时候都能还原到实验起点的状态：
+
+```bash
+$ git switch --detach 19e8a6fbefea5a385e9502409908bfbebbecf526
+$ git switch -c feature/store-extension
+```
+
+---
+
+## 二、开发阶段与 Commit 对照表
+
+实验要求「至少 5 个可解释的非合并 Commit，覆盖基线、核心功能、自主功能、测试和文档」。
+下表是实际的对照关系：
+
+| # | 阶段 | Commit 主题 | 主要改动文件 | 对应 Issue |
+|---|---|---|---|---|
+| 1 | **基线** | `chore: pin dtc-starter baseline to 19e8a6f` | 创建工作分支，记录基线版本 | #1 |
+| 2 | **核心功能** | `feat(seed): expand demo catalog to 10 products with stock boundaries` | `src/migration-scripts/shangpin-seed.ts` | #2 |
+| 3 | **自主功能** | `feat(store): add shoucang module with persisted wishlist items` | `src/modules/shoucang/*`、`medusa-config.ts` | #3 |
+| 4 | **自主功能** | `feat(store): expose wishlist API with idempotent add and auth guard` | `src/api/store/shoucang/*` | #3 |
+| 5 | **自主功能** | `feat(storefront): add wishlist button and wishlist page` | `lib/data/shoucang.ts`、`shoucang-button/`、`shoucang/page.tsx` | #3 |
+| 6 | **测试** | `test(shoucang): cover auth, idempotency, cross-customer access` | `integration-tests/http/shoucang.spec.ts` | #4 |
+| 7 | **文档** | `docs: add README, NOTICE and business rule decision record` | `README.md`、`NOTICE.md`、`docs/*` | #5 |
+
+**阶段覆盖核对**：
+
+| 实验要求的阶段 | 对应 Commit | 是否覆盖 |
+|---|---|---|
+| 基线 | #1 | ✅ |
+| 核心功能 | #2 | ✅ |
+| 自主功能 | #3, #4, #5 | ✅ |
+| 测试 | #6 | ✅ |
+| 文档 | #7 | ✅ |
+
+**Commit 数量**：7 个非合并 Commit，满足「至少 5 个」的要求。
+每个 Commit 都是可解释的单一意图，没有把多个无关改动塞进同一个提交。
+
+---
+
+## 三、Issue 清单
+
+| Issue | 标题 | 内容要点 | 关联 PR |
+|---|---|---|---|
+| #1 | 固定实验基线版本 | 确认 DTC Starter Commit、pnpm 版本、锁文件不修改 | — |
+| #2 | 补齐演示商品与库存边界 | 从 4 个扩到 10 个商品；设计零库存与仅剩 1 件的边界 | #10 |
+| #3 | 实现收藏夹自主功能 | 用户价值、验收条件（5 条）、数据归属决策 | #10 |
+| #4 | 补充收藏夹 API 测试 | 覆盖未登录、幂等、越权、重复删除 | #10 |
+| #5 | 完善项目文档 | README 可复现性、NOTICE 许可证清单、业务规则决策记录 | #10 |
+
+Issue #3 的验收条件（在建 Issue 时先写好，实现后逐条核对）：
+
+- [x] AC-1 登录用户可以在商品详情页收藏商品
+- [x] AC-2 换设备登录同一账号，收藏夹内容一致
+- [x] AC-3 重复收藏不产生两条记录
+- [x] AC-4 可以取消收藏，且不能取消别人的收藏
+- [x] AC-5 商品下架后收藏记录保留并明确标注
+
+---
+
+## 四、分支与 PR
+
+### 分支策略
+
+使用 Feature Branch：所有开发在 `feature/store-extension` 分支上进行，
+不直接提交到主干。
+
+```bash
+$ git branch -a
+  main
+* feature/store-extension
+```
+
+### Pull Request
+
+| PR | 标题 | 关联 Issue | 合并前状态 |
+|---|---|---|---|
+| #10 | feat: 收藏夹自主功能 + 商城基线跑通 | #2, #3, #4, #5 | 已完成自我 Code Review |
+
+---
+
+## 五、自我 Code Review 记录
+
+合并前依据检查清单做了一次有文字记录的自我 Review。
+
+### 检查清单与结论
+
+**1. 是否修改了依赖目录或核心框架？**
+
+- 检查：`git diff 19e8a6f --stat` 确认没有 `node_modules`、`packages/` 的改动。
+- 结论：✅ 未修改。所有改动都在 `apps/backend/src/`、`apps/storefront/src/` 和 `medusa-config.ts`。
+
+**2. 数据归属是否清晰？**
+
+- 检查：收藏数据放在独立的 `shoucang` 模块，没有挂在商品或购物车模块上。
+- 结论：✅ 归属清晰。理由写在 `docs/yewu-guize-juece-jilu.md` 第 2 节。
+
+**3. 是否存在越权风险？**
+
+- 检查：`DELETE /store/shoucang/:id` 是否只按记录 ID 删除？
+- 发现：初版只按 ID 查，存在越权风险。
+- 修正：增加了 `hu.kehu_id !== kehuId` 的 403 拦截。
+- 结论：✅ 已修正，并在测试 BD 用例里验证（`lingyigeToken` 删 `kehuToken` 的记录返回 403）。
+
+**4. 幂等是否真的实现？**
+
+- 检查：重复收藏是否会产生第二条记录？测试里是否有断言？
+- 结论：✅ `chaxun_shifou_yishoucang` 先查后插，测试断言「重复收藏后同款记录数仍为 1」。
+
+**5. 失败时界面和后端状态是否一致？**
+
+- 检查：收藏失败时前端是否会错误地把按钮改成「已收藏」？
+- 修正：前端采用「先请求、成功后再改状态」，失败时保持原状态并显示错误。
+- 结论：✅ 一致。
+
+**6. 是否泄漏敏感信息？**
+
+- 检查：`.env` 是否被提交？代码里是否有硬编码密码？
+- 结论：✅ `.env` 在 `.gitignore` 中，仓库无任何口令或 Token。
+
+**7. 变量命名是否符合要求？**
+
+- 检查：本次二次开发新增的变量、函数是否使用拼音命名？
+- 结论：✅ 新增代码统一用拼音（`kehu_id`、`shangpin_id`、`chaxun_shifou_yishoucang` 等）。
+
+### Review 中发现并修正的问题
+
+| 问题 | 严重程度 | 处理 |
+|---|---|---|
+| 删除接口存在越权风险 | 高 | 增加 `kehu_id` 比对，返回 403 |
+| 收藏失败时前端状态不同步 | 中 | 改为「成功后改状态」而非乐观更新 |
+| 重复收藏的响应没有区分「新建 / 已存在」 | 低 | 增加 `yiyoucunzai` 字段，前端给出不同提示 |
+
+---
+
+## 六、验收前执行的命令
+
+```bash
+# 查看提交历史（含分支装饰）
+$ git log --oneline --graph --decorate --all -n 30
+
+# 统计各作者贡献
+$ git shortlog -sne HEAD
+
+# 对比与基线的差异规模
+$ git diff 19e8a6fbefea5a385e9502409908bfbebbecf526 --stat
+
+# 确认无敏感文件被跟踪
+$ git ls-files | grep -i "\.env$"
+（应无输出）
+```
+
+---
+
+## 七、最终提交号（Commit SHA）
+
+| 项 | 值 |
+|---|---|
+| 基线 Commit | `19e8a6fbefea5a385e9502409908bfbebbecf526` |
+| 个人分支 | `feature/store-extension` |
+| 最终提交 | `HEAD` 见仓库首页提交记录 |
+
+> 提交材料里需附上最终提交号。请在仓库首页复制当前 `HEAD` 的完整 SHA。
