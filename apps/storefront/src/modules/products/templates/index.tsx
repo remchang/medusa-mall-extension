@@ -11,6 +11,9 @@ import { notFound } from "next/navigation"
 import { HttpTypes } from "@medusajs/types"
 
 import ProductActionsWrapper from "./product-actions-wrapper"
+import ShoucangButton from "@modules/products/components/shoucang-button"
+import { retrieveCustomer } from "@lib/data/customer"
+import { retrieveShoucang } from "@lib/data/shoucang"
 
 type ProductTemplateProps = {
   product: HttpTypes.StoreProduct
@@ -19,7 +22,7 @@ type ProductTemplateProps = {
   images: HttpTypes.StoreProductImage[]
 }
 
-const ProductTemplate: React.FC<ProductTemplateProps> = ({
+const ProductTemplate: React.FC<ProductTemplateProps> = async ({
   product,
   region,
   countryCode,
@@ -28,6 +31,14 @@ const ProductTemplate: React.FC<ProductTemplateProps> = ({
   if (!product || !product.id) {
     return notFound()
   }
+
+  // 二次开发新增：读取当前客户的收藏状态，供收藏按钮使用。
+  // 只读一次，不额外增加一次商品请求。
+  const kehu = await retrieveCustomer()
+  const shoucangLieBiao = kehu ? await retrieveShoucang() : []
+  const dangqianShoucang = shoucangLieBiao.find(
+    (t) => t.shangpin_id === product.id
+  )
 
   return (
     <>
@@ -55,6 +66,12 @@ const ProductTemplate: React.FC<ProductTemplateProps> = ({
           >
             <ProductActionsWrapper id={product.id} region={region} />
           </Suspense>
+          <ShoucangButton
+            shangpinId={product.id}
+            chushiYishoucang={!!dangqianShoucang}
+            shoucangId={dangqianShoucang?.id ?? null}
+            yidenglu={!!kehu}
+          />
         </div>
       </div>
       <div

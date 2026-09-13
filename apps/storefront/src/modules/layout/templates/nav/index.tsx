@@ -37,6 +37,14 @@ export default async function Nav() {
 
           <div className="flex items-center gap-x-6 h-full flex-1 basis-0 justify-end">
             <div className="hidden small:flex items-center gap-x-6 h-full">
+              {/* 二次开发新增：收藏夹入口 */}
+              <LocalizedClientLink
+                className="hover:text-ui-fg-base"
+                href="/shoucang"
+                data-testid="nav-shoucang-link"
+              >
+                收藏夹
+              </LocalizedClientLink>
               <LocalizedClientLink
                 className="hover:text-ui-fg-base"
                 href="/account"
